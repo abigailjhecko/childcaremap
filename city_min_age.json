@@ -1,0 +1,58 @@
+[
+  {
+    "city": "New York City",
+    "state": "New York",
+    "city_free_childcare_age": 3,
+    "state_typical_free_age": 4,
+    "program": "3-K for All / Universal Pre-K",
+    "notes": "City expanded free preschool to 3-year-olds while the state primarily guarantees pre-K access for 4-year-olds."
+  },
+  {
+    "city": "Washington",
+    "state": "District of Columbia",
+    "city_free_childcare_age": 3,
+    "state_typical_free_age": 4,
+    "program": "Universal Pre-K",
+    "notes": "Nearly universal access for both 3- and 4-year-olds through the public school system."
+  },
+  {
+    "city": "Boston",
+    "state": "Massachusetts",
+    "city_free_childcare_age": 3,
+    "state_typical_free_age": 4,
+    "program": "Boston Public Schools K0/K1 preschool",
+    "notes": "City added preschool for 3-year-olds (K0) in addition to 4-year-old programs."
+  },
+  {
+    "city": "Seattle",
+    "state": "Washington",
+    "city_free_childcare_age": 3,
+    "state_typical_free_age": 4,
+    "program": "Seattle Preschool Program",
+    "notes": "City-funded preschool includes 3- and 4-year-olds with subsidies or free seats for lower-income families."
+  },
+  {
+    "city": "San Antonio",
+    "state": "Texas",
+    "city_free_childcare_age": 3,
+    "state_typical_free_age": 4,
+    "program": "Pre-K 4 SA",
+    "notes": "City sales tax funds preschool programs including 3-year-olds in some centers."
+  },
+  {
+    "city": "Denver",
+    "state": "Colorado",
+    "city_free_childcare_age": 4,
+    "state_typical_free_age": 5,
+    "program": "Denver Preschool Program",
+    "notes": "City provides tuition credits for preschool earlier than the state's kindergarten guarantee."
+  },
+  {
+    "city": "San Francisco",
+    "state": "California",
+    "city_free_childcare_age": 4,
+    "state_typical_free_age": 5,
+    "program": "Preschool for All",
+    "notes": "Citywide subsidies and free preschool seats for 4-year-olds before statewide kindergarten entry."
+  }
+]

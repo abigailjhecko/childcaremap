@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>National Childcare Free Age Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    html,body,#map { height: 100%; margin: 0; padding: 0; }
+    #map { width: 100vw; height: 100vh; }
+    .legend {
+      background: white;
+      padding: 12px 10px;
+      font: 14px/16px Arial, Helvetica, sans-serif;
+      border-radius: 4px;
+      min-width: 140px;
+    }
+    .gradient-bar {
+      height: 20px;
+      background: linear-gradient(to right,
+        #e8f4f8 0%, #b3dfe6 20%, #7ec8d9 40%,
+        #4ab0cc 60%, #2b7fa5 80%, #1a4d7a 100%);
+      margin: 6px 0 8px;
+      border: 1px solid #222;
+    }
+    .grades-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // create map and center on continental US (expanded bounds for extra zoom-out)
+    const usBounds = [[22, -127], [52, -65]]; // a bit larger than the mainland
+    const map = L.map('map', {
+      maxBounds: usBounds,
+      maxBoundsViscosity: 1.0,
+      minZoom: 4,
+      maxZoom: 8,                  // allow reasonable zooming in
+      zoomControl: true,          // show standard controls for reset
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      dragging: true,
+      touchZoom: true,
+      boxZoom: true
+    }).fitBounds(usBounds);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap © CartoDB'
+    }).addTo(map);
+
+    // color logic
+    function hexToRgb(hex) {
+      const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+      if (!m) return null;
+      const num = parseInt(m[1], 16);
+      return { r: (num >> 16) & 0xff, g: (num >> 8) & 0xff, b: num & 0xff };
+    }
+    function rgbToHex(r, g, b) {
+      return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+    function mixColors(c1, c2) {
+      const rgb1 = hexToRgb(c1);
+      const rgb2 = hexToRgb(c2);
+      if (!rgb1 || !rgb2) return '#cccccc';
+      return rgbToHex(
+        Math.round((rgb1.r + rgb2.r) / 2),
+        Math.round((rgb1.g + rgb2.g) / 2),
+        Math.round((rgb1.b + rgb2.b) / 2)
+      );
+    }
+    // lighten or darken a hex color by a percentage (-100 to 100)
+    function lightenColor(hex, pct) {
+      const rgb = hexToRgb(hex);
+      if (!rgb) return hex;
+      const adjust = (v) => Math.round(v + (255 - v) * pct/100);
+      return rgbToHex(adjust(rgb.r), adjust(rgb.g), adjust(rgb.b));
+    }
+
+    function getColor(age) {
+      if (typeof age === 'string' && age.includes('-')) {
+        const parts = age.split('-').map(s => s.trim());
+        if (parts.length === 2) {
+          // mix two base colors then lighten result
+          return lightenColor(
+            mixColors(getColor(parts[0]), getColor(parts[1])),
+            20
+          );
+        }
+      }
+      let base;
+      switch(String(age)) {
+        case '0': base = '#e8f4f8'; break;
+        case '1': base = '#b3dfe6'; break;
+        case '2': base = '#7ec8d9'; break;
+        case '3': base = '#4ab0cc'; break;
+        case '4': base = '#2b7fa5'; break;
+        case '5': base = '#1a4d7a'; break;
+        default:  base = '#cccccc';
+      }
+      // lighten every base color by 20%
+      return lightenColor(base, 20);
+    }
+
+    function styleFeature(feature) {
+      const age = feature.properties && feature.properties.free_age;
+      return {
+        fillColor: getColor(age),
+        color: '#222',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+      };
+    }
+
+    function onEach(feature, layer) {
+      const props = feature.properties || {};
+      const name = props.name || 'Unknown';
+      const age = props.free_age == null ? 'Unknown' : props.free_age;
+      layer.bindPopup('<strong>' + name + '</strong><br/>Childcare free at age: ' + age);
+      layer.on({
+        mouseover: e => e.target.setStyle({ weight: 3 }),
+        mouseout: e => e.target.setStyle({ weight: 2 }),
+        click: e => {
+          // zoom to clicked state while preserving max/min zoom bounds
+          const bounds = e.target.getBounds();
+          map.fitBounds(bounds, { maxZoom: 7, padding: [20,20] });
+        }
+      });
+    }
+
+    // load the age data then state geometries
+    fetch('state_min_age.json')
+      .then(r => r.json())
+      .then(data => {
+        // convert array to lookup by name
+        const lookup = {};
+        if (Array.isArray(data)) {
+          data.forEach(o => {
+            lookup[o.state] = o.earliest_free_age;
+          });
+        } else {
+          // handle object keyed by fips (not expected but safe)
+          const fipsToName = Object.fromEntries(
+            Object.entries(stateNameToFips).map(([n,c]) => [c, n])
+          );
+          Object.entries(data).forEach(([fips, rec]) => {
+            const name = fipsToName[fips];
+            if (name) lookup[name] = rec.earliest_free_age;
+          });
+        }
+        return lookup;
+      })
+      .then(lookup => fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
+        .then(r => r.json())
+        .then(statesData => {
+          statesData.features.forEach(f => {
+            const name = f.properties && f.properties.name;
+            f.properties.free_age = lookup[name] !== undefined ? lookup[name] : null;
+          });
+          L.geoJSON(statesData, { style: styleFeature, onEachFeature: onEach }).addTo(map);
+        })
+      )
+      .catch(err => console.error('failed to load data', err));
+
+    // legend control
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = function(map) {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = '<strong>Free at age</strong><br/>';
+      div.innerHTML += '<div class="gradient-bar"></div>';
+      div.innerHTML += '<div class="grades-labels"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>';
+      div.innerHTML += '<div style="margin-top:6px;"><i style="background:#cccccc;width:18px;height:18px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>Unknown</div>';
+      return div;
+    };
+    legend.addTo(map);
+
+    // draw city dots if data available
+    const cityCoords = {
+      "New York City": [40.7128, -74.0060],
+      "Washington": [38.9072, -77.0369],
+      "Boston": [42.3601, -71.0589],
+      "Seattle": [47.6062, -122.3321],
+      "San Antonio": [29.4241, -98.4936],
+      "Denver": [39.7392, -104.9903],
+      "San Francisco": [37.7749, -122.4194]
+    };
+
+    fetch('city_min_age.json')
+      .then(r => r.json())
+      .then(cities => {
+        cities.forEach(c => {
+          const coords = cityCoords[c.city];
+          if (!coords) return;
+          const age = c.city_free_childcare_age;
+          const color = getColor(age);
+          // create a simple svg pin with the appropriate fill color
+          const pinHtml = `
+            <svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 23 9 23s9-16.25 9-23c0-4.97-4.03-9-9-9z" fill="${color}" stroke="#000" stroke-width="1"/>
+              <circle cx="12" cy="9" r="4" fill="#fff"/>
+            </svg>
+          `;
+          const pinIcon = L.divIcon({
+            className: 'city-pin',
+            html: pinHtml,
+            iconSize: [24, 32],
+            iconAnchor: [12, 32]
+          });
+          L.marker(coords, { icon: pinIcon })
+            .bindPopup('<strong>'+c.city+'</strong><br/>Free at age: '+age+'<br/>' + c.program)
+            .addTo(map);
+        });
+      })
+      .catch(err => console.warn('city data failed', err));
+
+    // reset view on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        map.fitBounds(usBounds);
+      }
+    });
+
+    // map done
+  </script>
+</body>
+</html>
